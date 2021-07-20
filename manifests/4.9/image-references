@@ -1,0 +1,25 @@
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+spec:
+  tags:
+  - name: aws-efs-csi-driver-operator
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-aws-efs-csi-driver-operator:latest
+  - name: aws-efs-csi-driver
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-aws-efs-csi-driver:latest
+  - name: csi-external-provisioner
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-csi-external-provisioner
+  - name: csi-node-driver-registrar
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-csi-node-driver-registrar
+  - name: csi-livenessprobe
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-csi-livenessprobe:latest
