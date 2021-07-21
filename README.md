@@ -33,3 +33,17 @@ export OPERATOR_NAME=aws-efs-csi-driver-operator
 # Run the operator via CLI
 ./aws-efs-csi-driver-operator start --kubeconfig $KUBECONFIG --namespace openshift-cluster-csi-drivers
 ```
+
+
+# OLM
+
+To build an bundle + index images, use `hack/create-bundle`.
+
+```shell
+cd hack
+./create-bundle registry.ci.openshift.org/ocp/4.9:aws-efs-csi-driver registry.ci.openshift.org/ocp/4.9:aws-efs-csi-driver-operator quay.io/<my-repo>/efs-bundle quay.io/<my-repo>/efs-index
+```
+
+At the end it will print a command that creates `Subscription` for the newly created index image.
+
+TODO: update the example to use `quay.io/openshift` once the images are mirrored there. `registry.ci.openshift.org` is not public.

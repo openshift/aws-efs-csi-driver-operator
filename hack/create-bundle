@@ -1,0 +1,85 @@
+#!/bin/sh
+
+# A hackish script to build bundle and index images for given driver + operator images.
+# The output is available in opm-bundle directory.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+if [ "$#" -ne "4" ]; then
+    echo "Usage: $0 <input_driver_image> <input_operator_image> <output_bundle_image> <output_index_image>"
+    exit 1
+fi
+
+DRIVER_IMAGE=$1
+OPERATOR_IMAGE=$2
+BUNDLE_IMAGE=$3
+INDEX_IMAGE=$4
+
+# Prepare output dir
+mkdir -p opm-bundle
+pushd opm-bundle
+
+mkdir -p manifests metadata
+
+cat - <<EOF > metadata/annotations.yaml
+annotations:
+  operators.operatorframework.io.bundle.channel.default.v1: 4.9
+  operators.operatorframework.io.bundle.channels.v1: 4.9
+  operators.operatorframework.io.bundle.manifests.v1: manifests/
+  operators.operatorframework.io.bundle.mediatype.v1: registry+v1
+  operators.operatorframework.io.bundle.metadata.v1: metadata/
+  operators.operatorframework.io.bundle.package.v1: aws-efs-csi-driver-operator
+EOF
+
+cat - <<EOF > Dockerfile
+FROM scratch
+LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
+LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
+LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
+LABEL operators.operatorframework.io.bundle.package.v1=aws-efs-csi-driver-operator
+LABEL operators.operatorframework.io.bundle.channels.v1=4.9
+LABEL operators.operatorframework.io.bundle.channel.default.v1=4.9
+COPY manifests /manifests/
+COPY metadata/annotations.yaml /metadata/annotations.yaml
+EOF
+
+MANIFEST=manifests/aws-efs-csi-driver-operator.clusterserviceversion.yaml
+cp -v ../../manifests/4.*/aws-efs*.yaml $MANIFEST
+
+# Replace images in the manifest - error prone, needs to be in sync with image-references.
+sed -i $MANIFEST -e "s~quay.io/openshift/origin-aws-efs-csi-driver-operator:latest~$OPERATOR_IMAGE~" -e "s~quay.io/openshift/origin-aws-efs-csi-driver:latest~$DRIVER_IMAGE~"
+
+# Build the bundle and push it
+docker build -t $BUNDLE_IMAGE .
+docker push $BUNDLE_IMAGE
+
+# Build the index image and push it
+opm index add --bundles $BUNDLE_IMAGE --tag $INDEX_IMAGE --container-tool docker
+docker push $INDEX_IMAGE
+
+
+echo
+echo --------------------
+echo "Index image created"
+echo "Copy following snipped to apply it to your cluster"
+echo
+
+# Show oc apply -f - <<EOF to copy-paste into shell
+cat <<REAL_EOF
+oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: aws-efs
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: $INDEX_IMAGE
+EOF
+REAL_EOF
+
+echo
+
+popd
