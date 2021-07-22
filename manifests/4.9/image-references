@@ -3,14 +3,14 @@ kind: ImageStream
 apiVersion: image.openshift.io/v1
 spec:
   tags:
-  - name: aws-efs-csi-driver-operator
+  - name: aws-efs-csi-driver-rhel8-operator
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-aws-efs-csi-driver-operator:latest
-  - name: aws-efs-csi-driver
+      name: quay.io/openshift/origin-aws-efs-csi-driver-rhel8-operator:latest
+  - name: aws-efs-csi-driver-container-rhel8
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-aws-efs-csi-driver:latest
+      name: quay.io/openshift/origin-aws-efs-csi-driver-container-rhel8:latest
   - name: csi-external-provisioner
     from:
       kind: DockerImage
