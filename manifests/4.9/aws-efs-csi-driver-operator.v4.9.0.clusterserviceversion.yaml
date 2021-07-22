@@ -90,6 +90,12 @@ spec:
             - replicasets
             verbs:
             - '*'
+          - apiGroups:
+            - monitoring.coreos.com
+            resources:
+            - servicemonitors
+            verbs:
+            - '*'
           serviceAccountName: aws-efs-csi-driver-operator
       clusterPermissions:
         - rules:
@@ -261,6 +267,20 @@ spec:
             - get
             - list
             - watch
+          - apiGroups:
+            - authentication.k8s.io
+            resources:
+            - tokenreviews
+            verbs:
+            - create
+          - apiGroups:
+            - ""
+            resources:
+            - nodes
+            verbs:
+            - get
+            - list
+            - watch
           serviceAccountName: aws-efs-csi-driver-operator
       deployments:
         - name: aws-efs-csi-driver-operator
@@ -299,6 +319,8 @@ spec:
                       value: quay.io/openshift/origin-csi-livenessprobe:latest
                     - name: OPERATOR_NAME
                       value: aws-efs-csi-driver-operator
+                    - name: KUBE_RBAC_PROXY_IMAGE
+                      value: quay.io/openshift/origin-kube-rbac-proxy:latest
                   resources:
                     requests:
                       memory: 50Mi

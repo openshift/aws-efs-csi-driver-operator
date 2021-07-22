@@ -20,6 +20,25 @@ import (
 	"k8s.io/klog/v2"
 )
 
+type SyncObjects struct {
+	CSIDriver      *storagev1.CSIDriver
+	PrivilegedRole *rbacv1.ClusterRole
+
+	NodeServiceAccount *corev1.ServiceAccount
+	NodeRoleBinding    *rbacv1.ClusterRoleBinding
+
+	ControllerServiceAccount *corev1.ServiceAccount
+	ControllerRoleBinding    *rbacv1.ClusterRoleBinding
+	ProvisionerRole          *rbacv1.ClusterRole
+	ProvisionerRoleBinding   *rbacv1.ClusterRoleBinding
+
+	PrometheusRole        *rbacv1.Role
+	PrometheusRoleBinding *rbacv1.RoleBinding
+	MetricsService        *corev1.Service
+	RBACProxyRole         *rbacv1.ClusterRole
+	RBACProxyRoleBinding  *rbacv1.ClusterRoleBinding
+}
+
 // CSIStaticResourceController creates, manages and deletes static resources of a CSI driver, such as RBAC rules.
 // It's more hardcoded variant of library-go's StaticResourceController, which does not implement removal
 // of objects yet.
@@ -29,12 +48,7 @@ type CSIStaticResourceController struct {
 	operatorClient    operatorv1helpers.OperatorClientWithFinalizers
 	kubeClient        kubernetes.Interface
 	eventRecorder     events.Recorder
-
-	// Objects to sync
-	csiDriver          *storagev1.CSIDriver
-	nodeServiceAccount *corev1.ServiceAccount
-	nodeRole           *rbacv1.ClusterRole
-	nodeRoleBinding    *rbacv1.ClusterRoleBinding
+	objs              SyncObjects
 }
 
 func NewCSIStaticResourceController(
@@ -44,21 +58,15 @@ func NewCSIStaticResourceController(
 	kubeClient kubernetes.Interface,
 	informers operatorv1helpers.KubeInformersForNamespaces,
 	recorder events.Recorder,
-	csiDriver *storagev1.CSIDriver,
-	nodeServiceAccount *corev1.ServiceAccount,
-	nodeRole *rbacv1.ClusterRole,
-	nodeRoleBinding *rbacv1.ClusterRoleBinding,
+	objs SyncObjects,
 ) factory.Controller {
 	c := &CSIStaticResourceController{
-		operatorName:       name,
-		operatorNamespace:  operatorNamespace,
-		operatorClient:     operatorClient,
-		kubeClient:         kubeClient,
-		eventRecorder:      recorder,
-		csiDriver:          csiDriver,
-		nodeServiceAccount: nodeServiceAccount,
-		nodeRole:           nodeRole,
-		nodeRoleBinding:    nodeRoleBinding,
+		operatorName:      name,
+		operatorNamespace: operatorNamespace,
+		operatorClient:    operatorClient,
+		kubeClient:        kubeClient,
+		eventRecorder:     recorder,
+		objs:              objs,
 	}
 
 	operatorInformers := []factory.Informer{
@@ -67,6 +75,9 @@ func NewCSIStaticResourceController(
 		informers.InformersFor(operatorNamespace).Storage().V1().CSIDrivers().Informer(),
 		informers.InformersFor(operatorNamespace).Rbac().V1().ClusterRoles().Informer(),
 		informers.InformersFor(operatorNamespace).Rbac().V1().ClusterRoleBindings().Informer(),
+		informers.InformersFor(operatorNamespace).Rbac().V1().Roles().Informer(),
+		informers.InformersFor(operatorNamespace).Rbac().V1().RoleBindings().Informer(),
+		informers.InformersFor(operatorNamespace).Core().V1().Services().Informer(),
 	}
 	return factory.New().
 		WithSyncDegradedOnError(operatorClient).
@@ -107,19 +118,62 @@ func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *o
 	}
 
 	var errs []error
-	_, _, err = resourceapply.ApplyCSIDriver(ctx, c.kubeClient.StorageV1(), c.eventRecorder, c.csiDriver)
+	// Common
+	_, _, err = resourceapply.ApplyCSIDriver(ctx, c.kubeClient.StorageV1(), c.eventRecorder, c.objs.CSIDriver)
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.nodeRole)
+	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.PrivilegedRole)
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.nodeRoleBinding)
+
+	// Node
+	_, _, err = resourceapply.ApplyServiceAccount(ctx, c.kubeClient.CoreV1(), c.eventRecorder, c.objs.NodeServiceAccount)
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyServiceAccount(ctx, c.kubeClient.CoreV1(), c.eventRecorder, c.nodeServiceAccount)
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.NodeRoleBinding)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	// Controller
+	_, _, err = resourceapply.ApplyServiceAccount(ctx, c.kubeClient.CoreV1(), c.eventRecorder, c.objs.ControllerServiceAccount)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ControllerRoleBinding)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ProvisionerRole)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ProvisionerRoleBinding)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	// Metrics
+	_, _, err = resourceapply.ApplyRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.PrometheusRole)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.PrometheusRoleBinding)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyService(ctx, c.kubeClient.CoreV1(), c.eventRecorder, c.objs.MetricsService)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.RBACProxyRole)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.RBACProxyRoleBinding)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -129,37 +183,115 @@ func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *o
 
 func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *opv1.OperatorSpec, opStatus *opv1.OperatorStatus, controllerContext factory.SyncContext) error {
 	var errs []error
-	if err := c.kubeClient.StorageV1().CSIDrivers().Delete(ctx, c.csiDriver.Name, metav1.DeleteOptions{}); err != nil {
+
+	// Common
+	if err := c.kubeClient.StorageV1().CSIDrivers().Delete(ctx, c.objs.CSIDriver.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
 		} else {
-			klog.V(4).Infof("CSIDriver %s already removed", c.csiDriver.Name)
+			klog.V(4).Infof("CSIDriver %s already removed", c.objs.CSIDriver.Name)
 		}
 	}
 
-	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.nodeRole.Name, metav1.DeleteOptions{}); err != nil {
+	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.objs.PrivilegedRole.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
 		} else {
-			klog.V(4).Infof("ClusterRole %s already removed", c.nodeRole.Name)
+			klog.V(4).Infof("ClusterRole %s already removed", c.objs.PrivilegedRole.Name)
 		}
 	}
 
-	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.nodeRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
+	// Node
+	if err := c.kubeClient.CoreV1().ServiceAccounts(c.operatorNamespace).Delete(ctx, c.objs.NodeServiceAccount.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
 		} else {
-			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.nodeRoleBinding.Name)
+			klog.V(4).Infof("ServiceAccount %s already removed", c.objs.NodeServiceAccount.Name)
 		}
 	}
 
-	if err := c.kubeClient.CoreV1().ServiceAccounts(c.operatorNamespace).Delete(ctx, c.nodeServiceAccount.Name, metav1.DeleteOptions{}); err != nil {
+	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.NodeRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
 		} else {
-			klog.V(4).Infof("ServiceAccount %s already removed", c.nodeServiceAccount.Name)
+			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.objs.NodeRoleBinding.Name)
 		}
 	}
+
+	// Controller
+	if err := c.kubeClient.CoreV1().ServiceAccounts(c.operatorNamespace).Delete(ctx, c.objs.ControllerServiceAccount.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("ServiceAccount %s already removed", c.objs.ControllerServiceAccount.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.ControllerRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.objs.ControllerRoleBinding.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.objs.ProvisionerRole.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("ClusterRole %s already removed", c.objs.ProvisionerRole.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.ProvisionerRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.objs.ProvisionerRoleBinding.Name)
+		}
+	}
+
+	// Metrics
+	if err := c.kubeClient.RbacV1().Roles(c.operatorNamespace).Delete(ctx, c.objs.PrometheusRole.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("Role %s already removed", c.objs.PrometheusRole.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().RoleBindings(c.operatorNamespace).Delete(ctx, c.objs.PrometheusRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("RoleBinding %s already removed", c.objs.PrometheusRoleBinding.Name)
+		}
+	}
+
+	if err := c.kubeClient.CoreV1().Services(c.operatorNamespace).Delete(ctx, c.objs.MetricsService.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("Service %s already removed", c.objs.MetricsService.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.objs.RBACProxyRole.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("ClusterRole %s already removed", c.objs.RBACProxyRole.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.RBACProxyRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.objs.RBACProxyRoleBinding.Name)
+		}
+	}
+
 	if err := errors.NewAggregate(errs); err != nil {
 		return err
 	}
