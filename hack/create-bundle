@@ -20,39 +20,15 @@ INDEX_IMAGE=$4
 # Prepare output dir
 mkdir -p opm-bundle
 pushd opm-bundle
+cp -r -v ../../config/* .
 
-mkdir -p manifests metadata
-
-cat - <<EOF > metadata/annotations.yaml
-annotations:
-  operators.operatorframework.io.bundle.channel.default.v1: 4.9
-  operators.operatorframework.io.bundle.channels.v1: 4.9
-  operators.operatorframework.io.bundle.manifests.v1: manifests/
-  operators.operatorframework.io.bundle.mediatype.v1: registry+v1
-  operators.operatorframework.io.bundle.metadata.v1: metadata/
-  operators.operatorframework.io.bundle.package.v1: aws-efs-csi-driver-operator
-EOF
-
-cat - <<EOF > Dockerfile
-FROM scratch
-LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
-LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
-LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
-LABEL operators.operatorframework.io.bundle.package.v1=aws-efs-csi-driver-operator
-LABEL operators.operatorframework.io.bundle.channels.v1=4.9
-LABEL operators.operatorframework.io.bundle.channel.default.v1=4.9
-COPY manifests /manifests/
-COPY metadata/annotations.yaml /metadata/annotations.yaml
-EOF
-
-MANIFEST=manifests/aws-efs-csi-driver-operator.clusterserviceversion.yaml
-cp -v ../../manifests/4.*/aws-efs*.yaml $MANIFEST
+MANIFEST=manifests/4.9/aws-efs-csi-driver-operator.clusterserviceversion.yaml
 
 # Replace images in the manifest - error prone, needs to be in sync with image-references.
 sed -i $MANIFEST -e "s~quay.io/openshift/origin-aws-efs-csi-driver-operator:latest~$OPERATOR_IMAGE~" -e "s~quay.io/openshift/origin-aws-efs-csi-driver:latest~$DRIVER_IMAGE~"
 
 # Build the bundle and push it
-docker build -t $BUNDLE_IMAGE .
+docker build -t $BUNDLE_IMAGE -f bundle.Dockerfile .
 docker push $BUNDLE_IMAGE
 
 # Build the index image and push it
