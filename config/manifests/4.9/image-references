@@ -6,19 +6,19 @@ spec:
   - name: aws-efs-csi-driver-rhel8-operator
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-aws-efs-csi-driver-rhel8-operator:latest
+      name: quay.io/openshift/origin-aws-efs-csi-driver-operator:latest
   - name: aws-efs-csi-driver-container-rhel8
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-aws-efs-csi-driver-container-rhel8:latest
+      name: quay.io/openshift/origin-aws-efs-csi-driver:latest
   - name: csi-external-provisioner
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-csi-external-provisioner
+      name: quay.io/openshift/origin-csi-external-provisioner:latest
   - name: csi-node-driver-registrar
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-csi-node-driver-registrar
+      name: quay.io/openshift/origin-csi-node-driver-registrar:latest
   - name: csi-livenessprobe
     from:
       kind: DockerImage
