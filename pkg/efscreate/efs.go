@@ -2,6 +2,9 @@ package efscreate
 
 import (
 	"fmt"
+	v1 "github.com/openshift/api/config/v1"
+	corev1 "k8s.io/api/core/v1"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -12,31 +15,27 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var instances = []string{
-	"i-06a19f2d528f48278",
-}
-
 const (
 	volumeCreateInitialDelay  = 5 * time.Second
 	volumeCreateBackoffFactor = 1.2
 	volumeCreateBackoffSteps  = 10
 
-	operationDelay         = 2 * time.Second
-	operationBackoffFactor = 1.2
-	operationRetryCount    = 5
-	efsVolumeName          = "hekumar-efs-test"
-	securityGroupName      = "hekumar-efs-group"
+	operationDelay          = 2 * time.Second
+	operationBackoffFactor  = 1.2
+	operationRetryCount     = 5
+	tagFormat               = "kubernetes.io/cluster/%s"
+	efsVolumeNameFormat     = "%s-efs"
+	securityGroupNameFormat = "%s-sg"
 )
 
 type EFS struct {
-	config     *aws.Config
-	client     *ec2.EC2
-	efsClient  *awsefs.EFS
-	vpcID      string
-	cidrBlock  string
-	regionName string
-	subnetIDs  []string
-	resources  *ResourceInfo
+	infra     *v1.Infrastructure
+	client    *ec2.EC2
+	efsClient *awsefs.EFS
+	vpcID     string
+	cidrBlock string
+	subnetIDs []string
+	resources *ResourceInfo
 }
 
 // store resources that the code created
@@ -46,31 +45,21 @@ type ResourceInfo struct {
 	mountTargets   []string
 }
 
-func NewEFS_Session() *EFS {
-	regionName := "us-east-1"
-	awsConfig := &aws.Config{
-		Region: &regionName,
-	}
-	sess, err := session.NewSession(awsConfig)
-	if err != nil {
-		fmt.Println("Error creating session ", err)
-		return nil
-	}
+func NewEFS_Session(infra *v1.Infrastructure, sess *session.Session) *EFS {
 	service := ec2.New(sess)
-
 	efsClient := awsefs.New(sess)
 	return &EFS{
-		config:     awsConfig,
-		client:     service,
-		efsClient:  efsClient,
-		regionName: regionName,
-		subnetIDs:  []string{},
-		resources:  &ResourceInfo{},
+		client:    service,
+		efsClient: efsClient,
+		infra:     infra,
+		subnetIDs: []string{},
+		resources: &ResourceInfo{},
 	}
 }
 
-func (efs *EFS) CreateEFSVolume() (string, error) {
-	err := efs.getSecurityInfo()
+func (efs *EFS) CreateEFSVolume(nodes *corev1.NodeList) (string, error) {
+	instances := efs.getInstanceIDs(nodes)
+	err := efs.getSecurityInfo(instances)
 	if err != nil {
 		return "", err
 	}
@@ -98,12 +87,27 @@ func (efs *EFS) CreateEFSVolume() (string, error) {
 	return fileSystemID, nil
 }
 
+func (efs *EFS) getInstanceIDs(nodes *corev1.NodeList) []string {
+	nodeIDs := sets.NewString()
+	for _, node := range nodes.Items {
+		//get providerID of the form aws:///us-west-2a/i-0304804a704fefb7d
+		instanceString := node.Spec.ProviderID
+		instanceStringArray := strings.Split(instanceString, "/")
+		if len(instanceStringArray) > 0 {
+			nodeIDs.Insert(instanceStringArray[len(instanceStringArray)-1])
+		}
+	}
+	return nodeIDs.List()
+}
+
 func (efs *EFS) createSecurityGroup() (string, error) {
+	infraID := efs.infra.Status.InfrastructureName
+	groupName := fmt.Sprintf(securityGroupNameFormat, infraID)
 	securityGroupInput := ec2.CreateSecurityGroupInput{
 		Description:       aws.String("for testing efs driver"),
-		GroupName:         aws.String(securityGroupName),
+		GroupName:         aws.String(groupName),
 		VpcId:             &efs.vpcID,
-		TagSpecifications: efs.getTags(ec2.ResourceTypeSecurityGroup, securityGroupName),
+		TagSpecifications: efs.getTags(ec2.ResourceTypeSecurityGroup, groupName),
 	}
 	response, err := efs.client.CreateSecurityGroup(&securityGroupInput)
 	if err != nil {
@@ -115,7 +119,8 @@ func (efs *EFS) createSecurityGroup() (string, error) {
 func (efs *EFS) getTags(resourceType string, resourceName string) []*ec2.TagSpecification {
 	var tagList []*ec2.Tag
 	tags := map[string]string{
-		"Name": resourceName,
+		"Name":                 resourceName,
+		efs.getClusterTagKey(): "owned",
 	}
 	for k, v := range tags {
 		tagList = append(tagList, &ec2.Tag{
@@ -128,6 +133,10 @@ func (efs *EFS) getTags(resourceType string, resourceName string) []*ec2.TagSpec
 			ResourceType: aws.String(resourceType),
 		},
 	}
+}
+
+func (efs *EFS) getClusterTagKey() string {
+	return fmt.Sprintf(tagFormat, efs.infra.Status.InfrastructureName)
 }
 
 func (efs *EFS) addFireWallRule(groupId string) (bool, error) {
@@ -220,13 +229,18 @@ func (efs *EFS) deleteSecurityGroup() error {
 }
 
 func (efs *EFS) createEFSFileSystem() (string, error) {
+	volumeName := fmt.Sprintf(efsVolumeNameFormat, efs.infra.Status.InfrastructureName)
 	input := &awsefs.CreateFileSystemInput{
 		Encrypted:       aws.Bool(true),
 		PerformanceMode: aws.String(awsefs.PerformanceModeGeneralPurpose),
 		Tags: []*awsefs.Tag{
 			{
 				Key:   aws.String("Name"),
-				Value: aws.String(efsVolumeName),
+				Value: aws.String(volumeName),
+			},
+			{
+				Key:   aws.String(efs.getClusterTagKey()),
+				Value: aws.String("owned"),
 			},
 		},
 	}
@@ -286,7 +300,7 @@ func (efs *EFS) waitForEFSToBeAvailable(efsID string) error {
 	return err
 }
 
-func (efs *EFS) getSecurityInfo() error {
+func (efs *EFS) getSecurityInfo(instances []string) error {
 	var instancePointers []*string
 	for i := range instances {
 		instancePointers = append(instancePointers, &instances[i])
