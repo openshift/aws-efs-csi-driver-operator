@@ -162,77 +162,8 @@ func (efs *EFS) addFireWallRule() (bool, error) {
 	return *response.Return, nil
 }
 
-func (efs *EFS) DestroyAll() error {
-	var err error
-	if len(efs.resources.mountTargets) > 0 {
-		err = efs.deleteMountTarget()
-	}
-	if len(efs.resources.efsID) != 0 {
-		err = efs.deleteEFS()
-	}
-
-	if len(efs.resources.securityGroupID) != 0 {
-		err = efs.deleteSecurityGroup()
-	}
-	return err
-}
-
-func (efs *EFS) deleteMountTarget() error {
-	for _, mt := range efs.resources.mountTargets {
-		log("Deleting mount target id: %s\n", mt)
-		deleteTargetInput := &awsefs.DeleteMountTargetInput{
-			MountTargetId: aws.String(mt),
-		}
-		_, err := efs.efsClient.DeleteMountTarget(deleteTargetInput)
-		if err != nil {
-			return fmt.Errorf("failed to delete mount target: %v", err)
-		}
-		log("successfully deleted mount target %s", mt)
-	}
-	return nil
-}
-
 func log(msg string, args ...interface{}) {
 	klog.Infof(msg, args...)
-}
-
-func (efs *EFS) deleteEFS() error {
-	backoff := wait.Backoff{
-		Duration: volumeCreateInitialDelay,
-		Factor:   operationBackoffFactor,
-		Steps:    operationRetryCount,
-	}
-	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
-		deleteEFSInput := &awsefs.DeleteFileSystemInput{FileSystemId: aws.String(efs.resources.efsID)}
-		_, delError := efs.efsClient.DeleteFileSystem(deleteEFSInput)
-		if delError != nil {
-			log("error deleting filesystem %s: %v", efs.resources.efsID, delError)
-			return false, nil
-		}
-		log("successfully deleted filesystem %s", efs.resources.efsID)
-		return true, nil
-	})
-	return err
-}
-
-func (efs *EFS) deleteSecurityGroup() error {
-	backoff := wait.Backoff{
-		Duration: operationDelay,
-		Factor:   operationBackoffFactor,
-		Steps:    operationRetryCount,
-	}
-	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
-		deleteGroupInput := &ec2.DeleteSecurityGroupInput{GroupId: aws.String(efs.resources.securityGroupID)}
-		_, delError := efs.client.DeleteSecurityGroup(deleteGroupInput)
-		if delError != nil {
-			log("error deleting security group %s: %v", efs.resources.securityGroupID, delError)
-			return false, nil
-		}
-		log("successfully deleted securityGroup %s", efs.resources.securityGroupID)
-		return true, nil
-	})
-	return err
-
 }
 
 func (efs *EFS) createEFSFileSystem() (string, error) {
