@@ -3,7 +3,10 @@ package efscreate
 import (
 	"context"
 	"fmt"
+	v1 "github.com/openshift/api/config/v1"
 	"io/ioutil"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"os"
 	"strings"
 
@@ -33,14 +36,14 @@ const (
 func RunOperator(ctx context.Context, controllerConfig *controllercmd.ControllerContext) error {
 	// Create core clientset for core and infra objects
 	kubeClient := kubeclient.NewForConfigOrDie(rest.AddUserAgent(controllerConfig.KubeConfig, operatorName))
-	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := getNodes(ctx, kubeClient)
 	if err != nil {
 		klog.Errorf("error listing nodes: %v", err)
 		return fmt.Errorf("error listing nodes: %v", err)
 	}
 
 	configClient := configclient.NewForConfigOrDie(rest.AddUserAgent(controllerConfig.KubeConfig, operatorName))
-	infra, err := configClient.ConfigV1().Infrastructures().Get(ctx, infraGlobalName, metav1.GetOptions{})
+	infra, err := getInfra(ctx, configClient)
 	if err != nil {
 		klog.Errorf("error listing infrastructures objects: %v", err)
 		return fmt.Errorf("error listing infrastructure objects: %v", err)
@@ -71,6 +74,71 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	}
 
 	return nil
+}
+
+func getInfra(ctx context.Context, infraClient *configclient.Clientset) (infra *v1.Infrastructure, err error) {
+	backoff := wait.Backoff{
+		Duration: operationDelay,
+		Factor:   operationBackoffFactor,
+		Steps:    operationRetryCount,
+	}
+	err = wait.ExponentialBackoffWithContext(ctx, backoff, func() (bool, error) {
+		var apiError error
+		infra, apiError = infraClient.ConfigV1().Infrastructures().Get(ctx, infraGlobalName, metav1.GetOptions{})
+		if apiError != nil {
+			klog.Errorf("error listing infrastructures objects: %v", apiError)
+			return false, nil
+		}
+		if infra != nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	return
+}
+
+func getSecret(ctx context.Context, client *kubeclient.Clientset) (*corev1.Secret, error) {
+	backoff := wait.Backoff{
+		Duration: operationDelay,
+		Factor:   operationBackoffFactor,
+		Steps:    operationRetryCount,
+	}
+	var awsCreds *corev1.Secret
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func() (bool, error) {
+		var apiError error
+		awsCreds, apiError = client.CoreV1().Secrets(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
+		if apiError != nil {
+			klog.Errorf("error getting secret object: %v", apiError)
+			return false, nil
+		}
+		if awsCreds != nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	return awsCreds, err
+}
+
+func getNodes(ctx context.Context, client *kubeclient.Clientset) (*corev1.NodeList, error) {
+	backoff := wait.Backoff{
+		Duration: operationDelay,
+		Factor:   operationBackoffFactor,
+		Steps:    operationRetryCount,
+	}
+	var nodes *corev1.NodeList
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func() (bool, error) {
+		var apiError error
+		nodes, apiError = client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if apiError != nil {
+			klog.Errorf("error listing node objects: %v", apiError)
+			return false, nil
+		}
+		if nodes != nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	return nodes, err
 }
 
 func writeStorageClassFile(fsID string) error {
@@ -110,9 +178,9 @@ func writeCSIManifest(scName string) error {
 	return err
 }
 
-func getEC2Client(ctx context.Context, client kubeclient.Interface, region string) (*session.Session, error) {
+func getEC2Client(ctx context.Context, client *kubeclient.Clientset, region string) (*session.Session, error) {
 	// get AWS credentials
-	awsCreds, err := client.CoreV1().Secrets(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	awsCreds, err := getSecret(ctx, client)
 	if err != nil {
 		return nil, err
 	}

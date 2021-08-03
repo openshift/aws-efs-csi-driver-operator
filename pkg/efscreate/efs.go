@@ -288,7 +288,7 @@ func (efs *EFS) waitForAvailableMountTarget() error {
 	backoff := wait.Backoff{
 		Duration: operationDelay,
 		Factor:   operationBackoffFactor,
-		Steps:    operationRetryCount,
+		Steps:    volumeCreateBackoffSteps,
 	}
 	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
 		response, describeErr := efs.efsClient.DescribeMountTargets(describeInput)
