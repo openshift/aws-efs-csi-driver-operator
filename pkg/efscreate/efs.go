@@ -2,10 +2,12 @@ package efscreate
 
 import (
 	"fmt"
-	v1 "github.com/openshift/api/config/v1"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 	"strings"
 	"time"
+
+	v1 "github.com/openshift/api/config/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -40,12 +42,12 @@ type EFS struct {
 
 // store resources that the code created
 type ResourceInfo struct {
-	securityGrouID string
-	efsID          string
-	mountTargets   []string
+	securityGroupID string
+	efsID           string
+	mountTargets    []string
 }
 
-func NewEFS_Session(infra *v1.Infrastructure, sess *session.Session) *EFS {
+func NewEFSSession(infra *v1.Infrastructure, sess *session.Session) *EFS {
 	service := ec2.New(sess)
 	efsClient := awsefs.New(sess)
 	return &EFS{
@@ -67,8 +69,8 @@ func (efs *EFS) CreateEFSVolume(nodes *corev1.NodeList) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	efs.resources.securityGrouID = sgid
-	ok, err := efs.addFireWallRule(sgid)
+	efs.resources.securityGroupID = sgid
+	ok, err := efs.addFireWallRule()
 	if err != nil || !ok {
 		return "", fmt.Errorf("error adding firewall rule: %v", err)
 	}
@@ -78,11 +80,17 @@ func (efs *EFS) CreateEFSVolume(nodes *corev1.NodeList) (string, error) {
 		return "", err
 	}
 	efs.resources.efsID = fileSystemID
-	mts, err := efs.createMountTargets(fileSystemID, sgid)
+	mts, err := efs.createMountTargets()
 	if err != nil {
 		return "", err
 	}
 	efs.resources.mountTargets = mts
+
+	// wait for all mountTargets associated with filesystem ID to be become available
+	err = efs.waitForAvailableMountTarget()
+	if err != nil {
+		return fileSystemID, err
+	}
 	log("successfully created file system %s", fileSystemID)
 	return fileSystemID, nil
 }
@@ -139,10 +147,10 @@ func (efs *EFS) getClusterTagKey() string {
 	return fmt.Sprintf(tagFormat, efs.infra.Status.InfrastructureName)
 }
 
-func (efs *EFS) addFireWallRule(groupId string) (bool, error) {
+func (efs *EFS) addFireWallRule() (bool, error) {
 	ruleInput := ec2.AuthorizeSecurityGroupIngressInput{
 		CidrIp:     aws.String(efs.cidrBlock),
-		GroupId:    aws.String(groupId),
+		GroupId:    aws.String(efs.resources.securityGroupID),
 		IpProtocol: aws.String("tcp"),
 		ToPort:     aws.Int64(2049),
 		FromPort:   aws.Int64(2049),
@@ -163,7 +171,7 @@ func (efs *EFS) DestroyAll() error {
 		err = efs.deleteEFS()
 	}
 
-	if len(efs.resources.securityGrouID) != 0 {
+	if len(efs.resources.securityGroupID) != 0 {
 		err = efs.deleteSecurityGroup()
 	}
 	return err
@@ -185,8 +193,7 @@ func (efs *EFS) deleteMountTarget() error {
 }
 
 func log(msg string, args ...interface{}) {
-	msgString := fmt.Sprintf("%s\n", msg)
-	fmt.Printf(msgString, args...)
+	klog.Infof(msg, args...)
 }
 
 func (efs *EFS) deleteEFS() error {
@@ -215,13 +222,13 @@ func (efs *EFS) deleteSecurityGroup() error {
 		Steps:    operationRetryCount,
 	}
 	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
-		deleteGroupInput := &ec2.DeleteSecurityGroupInput{GroupId: aws.String(efs.resources.securityGrouID)}
+		deleteGroupInput := &ec2.DeleteSecurityGroupInput{GroupId: aws.String(efs.resources.securityGroupID)}
 		_, delError := efs.client.DeleteSecurityGroup(deleteGroupInput)
 		if delError != nil {
-			log("error deleting security group %s: %v", efs.resources.securityGrouID, delError)
+			log("error deleting security group %s: %v", efs.resources.securityGroupID, delError)
 			return false, nil
 		}
-		log("successfully deleted securityGroup %s", efs.resources.securityGrouID)
+		log("successfully deleted securityGroup %s", efs.resources.securityGroupID)
 		return true, nil
 	})
 	return err
@@ -257,13 +264,13 @@ func (efs *EFS) createEFSFileSystem() (string, error) {
 	return *response.FileSystemId, nil
 }
 
-func (efs *EFS) createMountTargets(efsID string, sgID string) ([]string, error) {
+func (efs *EFS) createMountTargets() ([]string, error) {
 	var mountTargets []string
 	for i := range efs.subnetIDs {
 		subnet := efs.subnetIDs[i]
 		mountTargetInput := &awsefs.CreateMountTargetInput{
-			FileSystemId:   aws.String(efsID),
-			SecurityGroups: []*string{aws.String(sgID)},
+			FileSystemId:   aws.String(efs.resources.efsID),
+			SecurityGroups: []*string{aws.String(efs.resources.securityGroupID)},
 			SubnetId:       aws.String(subnet),
 		}
 		mt, err := efs.efsClient.CreateMountTarget(mountTargetInput)
@@ -273,6 +280,37 @@ func (efs *EFS) createMountTargets(efsID string, sgID string) ([]string, error) 
 		mountTargets = append(mountTargets, *mt.MountTargetId)
 	}
 	return mountTargets, nil
+}
+
+func (efs *EFS) waitForAvailableMountTarget() error {
+	efsID := efs.resources.efsID
+	describeInput := &awsefs.DescribeMountTargetsInput{FileSystemId: aws.String(efsID)}
+	backoff := wait.Backoff{
+		Duration: operationDelay,
+		Factor:   operationBackoffFactor,
+		Steps:    operationRetryCount,
+	}
+	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+		response, describeErr := efs.efsClient.DescribeMountTargets(describeInput)
+		if describeErr != nil {
+			return false, describeErr
+		}
+		mountTargets := response.MountTargets
+		if len(mountTargets) == 0 {
+			return false, fmt.Errorf("no mount targets found associated with %s filesystem", efsID)
+		}
+		allReady := true
+		for _, mt := range mountTargets {
+			if *mt.LifeCycleState != awsefs.LifeCycleStateAvailable {
+				allReady = false
+			}
+		}
+		if allReady {
+			return true, nil
+		}
+		return false, nil
+	})
+	return err
 }
 
 func (efs *EFS) waitForEFSToBeAvailable(efsID string) error {

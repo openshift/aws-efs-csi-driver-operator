@@ -45,11 +45,16 @@ func NewOperatorCommand() *cobra.Command {
 		},
 	}
 
-	ctrlCmd := controllercmd.NewControllerCommandConfig(
+	ctrlCmdConfig := controllercmd.NewControllerCommandConfig(
 		"create-efs-volume",
 		version.Get(),
 		efscreate.RunOperator,
-	).NewCommand()
+	)
+	// we don't need leader election and metrics for CLI commands
+	ctrlCmdConfig.DisableLeaderElection = true
+	ctrlCmdConfig.DisableServing = true
+
+	ctrlCmd := ctrlCmdConfig.NewCommand()
 	ctrlCmd.Use = "start"
 	ctrlCmd.Short = "Create EFS volume"
 

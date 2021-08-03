@@ -3,17 +3,20 @@ package efscreate
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/openshift/aws-efs-csi-driver-operator/assets"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"os"
-	"strings"
 )
 
 const (
@@ -21,8 +24,10 @@ const (
 	infraGlobalName       = "cluster"
 	secretNamespace       = "kube-system"
 	secretName            = "aws-creds"
+	storageClassName      = "efs-sc"
 	STORAGECLASS_LOCATION = "STORAGEClASS_LOCATION"
 	MANIFEST_LOCATION     = "MANIFEST_LOCATION"
+	fileMode              = 0640
 )
 
 func RunOperator(ctx context.Context, controllerConfig *controllercmd.ControllerContext) error {
@@ -46,7 +51,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		return fmt.Errorf("error getting aws client: %v", err)
 	}
 
-	efs := NewEFS_Session(infra, ec2Session)
+	efs := NewEFSSession(infra, ec2Session)
 
 	fsID, err := efs.CreateEFSVolume(nodes)
 	if err != nil {
@@ -59,7 +64,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		klog.Errorf("error writing storageclass to location %s: %v", os.Getenv(STORAGECLASS_LOCATION), err)
 		return err
 	}
-	err = writeCSIManifest("efs-cs")
+	err = writeCSIManifest(storageClassName)
 	if err != nil {
 		klog.Errorf("error writing manifest to location %s: %v", os.Getenv(MANIFEST_LOCATION), err)
 		return err
@@ -70,77 +75,39 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 
 func writeStorageClassFile(fsID string) error {
 	fileName := os.Getenv(STORAGECLASS_LOCATION)
-	scContent := `
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: efs-sc
-provisioner: efs.csi.aws.com
-mountOptions:
-  - tls
-parameters:
-  provisioningMode: efs-ap
-  fileSystemId: ${filesystemid}
-  directoryPerms: "700"
-  basePath: "/dynamic_provisioning"
-    `
+	if len(fileName) == 0 {
+		return fmt.Errorf("no storageclass location specified")
+	}
+
+	scContentBytes, err := assets.ReadFile("testing/sc.yaml")
+	if err != nil {
+		return err
+	}
+	scContent := string(scContentBytes)
 	replaceStrings := []string{
+		"${storageclassname}", storageClassName,
 		"${filesystemid}", fsID,
 	}
 	replacer := strings.NewReplacer(replaceStrings...)
 	finalSCContent := replacer.Replace(scContent)
-	f, err := os.Create(fileName)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(finalSCContent)
-	if err != nil {
-		return err
-	}
-	return nil
+	err = ioutil.WriteFile(fileName, []byte(finalSCContent), fileMode)
+	return err
 }
 
 func writeCSIManifest(scName string) error {
 	manifestLocation := os.Getenv(MANIFEST_LOCATION)
-	manifestContent := `
-StorageClass:
-  FromExistingClassName: ${storageclassname}
-SnapshotClass:
-  FromName: true
-DriverInfo:
-  Name: efs.csi.aws.com
-  SupportedSizeRange:
-    Min: 1Gi
-    Max: 64Ti
-  Capabilities:
-    persistence: true
-    fsGroup: false
-    block: false
-    exec: true
-    volumeLimits: false
-    controllerExpansion: false
-    nodeExpansion: false
-    snapshotDataSource: false
-    RWX: true
-    topology: false
-	`
+	if len(manifestLocation) == 0 {
+		return fmt.Errorf("no manifest location specified")
+	}
+	manifestContentBytes, err := assets.ReadFile("testing/manifest.yaml")
+	manifestContent := string(manifestContentBytes)
 	replaceStrings := []string{
 		"${storageclassname}", scName,
 	}
 	replacer := strings.NewReplacer(replaceStrings...)
 	finalManifestContent := replacer.Replace(manifestContent)
-	f, err := os.Create(manifestLocation)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(finalManifestContent)
-	if err != nil {
-		return err
-	}
-	return nil
+	err = ioutil.WriteFile(manifestLocation, []byte(finalManifestContent), fileMode)
+	return err
 }
 
 func getEC2Client(ctx context.Context, client kubeclient.Interface, region string) (*session.Session, error) {
