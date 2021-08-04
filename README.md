@@ -34,6 +34,23 @@ export OPERATOR_NAME=aws-efs-csi-driver-operator
 ./aws-efs-csi-driver-operator start --kubeconfig $KUBECONFIG --namespace openshift-cluster-csi-drivers
 ```
 
+# Automatic creation of EFS filesystem and storageclasses
+
+For local testing and e2e, following command can be run to automate creation of EFS filesystem:
+
+```
+STORAGECLASS_LOCATION=sc.yaml MANIFEST_LOCATION=manifest.yaml ./create-efs-volume start --kubeconfig $KUBECONFIG --namespace openshift-cluster-csi-drivers
+```
+
+*Note*: Creation of EFS volume, security groups and firewall rules is not idempotent and hence you must delete those manually if you want to recreate.
+
+This should give us a storageclass which can be applied and can be used for testing:
+
+```
+oc create -f sc.yaml
+TEST_CSI_DRIVER_FILES=manifest.yaml ./openshift-tests run openshift/csi .
+```
+
 
 # OLM
 

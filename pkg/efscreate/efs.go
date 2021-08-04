@@ -2,9 +2,10 @@ package efscreate
 
 import (
 	"fmt"
-	"k8s.io/klog/v2"
 	"strings"
 	"time"
+
+	"k8s.io/klog/v2"
 
 	v1 "github.com/openshift/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -89,7 +90,7 @@ func (efs *EFS) CreateEFSVolume(nodes *corev1.NodeList) (string, error) {
 	// wait for all mountTargets associated with filesystem ID to be become available
 	err = efs.waitForAvailableMountTarget()
 	if err != nil {
-		return fileSystemID, err
+		return fileSystemID, fmt.Errorf("waiting for mount targets to be available failed: %v", err)
 	}
 	log("successfully created file system %s", fileSystemID)
 	return fileSystemID, nil
@@ -190,7 +191,7 @@ func (efs *EFS) createEFSFileSystem() (string, error) {
 	err = efs.waitForEFSToBeAvailable(*response.FileSystemId)
 	if err != nil {
 		log("error waiting for filesystem to become available: %v", err)
-		return *response.FileSystemId, err
+		return *response.FileSystemId, fmt.Errorf("waiting for EFS filesystem to become available failed: %v", err)
 	}
 	return *response.FileSystemId, nil
 }
@@ -217,7 +218,7 @@ func (efs *EFS) waitForAvailableMountTarget() error {
 	efsID := efs.resources.efsID
 	describeInput := &awsefs.DescribeMountTargetsInput{FileSystemId: aws.String(efsID)}
 	backoff := wait.Backoff{
-		Duration: operationDelay,
+		Duration: volumeCreateInitialDelay,
 		Factor:   operationBackoffFactor,
 		Steps:    volumeCreateBackoffSteps,
 	}
