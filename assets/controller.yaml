@@ -74,6 +74,14 @@ spec:
               # Due to hostNetwork, this port is open on a node!
               containerPort: 10303
               protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 10
+            failureThreshold: 5
           securityContext:
             # The driver needs to be privileged to be able to mount + clean EFS sub-directories that are used as PVs
             privileged: true
