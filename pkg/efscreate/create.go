@@ -3,12 +3,13 @@ package efscreate
 import (
 	"context"
 	"fmt"
-	v1 "github.com/openshift/api/config/v1"
 	"io/ioutil"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"os"
 	"strings"
+
+	v1 "github.com/openshift/api/config/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -28,7 +29,7 @@ const (
 	secretNamespace       = "kube-system"
 	secretName            = "aws-creds"
 	storageClassName      = "efs-sc"
-	STORAGECLASS_LOCATION = "STORAGEClASS_LOCATION"
+	STORAGECLASS_LOCATION = "STORAGECLASS_LOCATION"
 	MANIFEST_LOCATION     = "MANIFEST_LOCATION"
 	fileMode              = 0640
 )
