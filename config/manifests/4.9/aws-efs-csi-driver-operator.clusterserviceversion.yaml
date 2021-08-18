@@ -28,7 +28,7 @@ metadata:
     repository: https://github.com/openshift/aws-efs-csi-driver-operator
     createdAt: "2021-07-14T00:00:00Z"
     description: Install and configure AWS EFS CSI driver.
-    olm.skipRange: ">=4.3.0 <4.9.0"
+    olm.skipRange: ">=4.9.0 <4.9.0"
   labels:
     operator-metering: "true"
     "operatorframework.io/arch.amd64": supported
