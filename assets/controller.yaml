@@ -130,6 +130,9 @@ spec:
             - --extra-create-metadata=true
             - --http-endpoint=localhost:8212
             - --leader-election
+            - --leader-election-lease-duration=${LEADER_ELECTION_LEASE_DURATION}
+            - --leader-election-renew-deadline=${LEADER_ELECTION_RENEW_DEADLINE}
+            - --leader-election-retry-period=${LEADER_ELECTION_RETRY_PERIOD}
             - --v=${LOG_LEVEL}
           env:
             - name: ADDRESS
