@@ -1,7 +1,7 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
-  name: aws-efs-csi-driver-operator.v4.9.0
+  name: aws-efs-csi-driver-operator.v4.10.0
   namespace: placeholder
   annotations:
     # This example is useless, because the operator does not have its own CRD, OCP console won't offer it as a CR.
@@ -28,7 +28,7 @@ metadata:
     repository: https://github.com/openshift/aws-efs-csi-driver-operator
     createdAt: "2021-07-14T00:00:00Z"
     description: Install and configure AWS EFS CSI driver.
-    olm.skipRange: ">=4.9.0 <4.9.0"
+    olm.skipRange: ">=4.9.0 <4.10.0"
   labels:
     operator-metering: "true"
     "operatorframework.io/arch.amd64": supported
@@ -46,7 +46,7 @@ spec:
       url: https://github.com/openshift/aws-efs-csi-driver-operator
     - name: Source Repository
       url: https://github.com/openshift/aws-efs-csi-driver-operator
-  version: 4.9.0
+  version: 4.10.0
   maturity: stable
   maintainers:
     - email: aos-storage-staff@redhat.com
@@ -56,7 +56,7 @@ spec:
     name: Red Hat
   labels:
     alm-owner-metering: aws-efs-csi-driver-operator
-    alm-status-descriptors: aws-efs-csi-driver-operator.v4.9.0
+    alm-status-descriptors: aws-efs-csi-driver-operator.v4.10.0
   selector:
     matchLabels:
       alm-owner-metering: aws-efs-csi-driver-operator
