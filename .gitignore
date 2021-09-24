@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dylib
+aws-efs-csi-driver-operator
+create-efs-volume
 
 # Test binary, built with `go test -c`
 *.test
