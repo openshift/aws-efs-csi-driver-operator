@@ -4,22 +4,6 @@ metadata:
   name: aws-efs-csi-driver-operator.v4.9.0
   namespace: placeholder
   annotations:
-    # This example is useless, because the operator does not have its own CRD, OCP console won't offer it as a CR.
-    alm-examples: |-
-      [
-        {
-          "apiVersion": "operator.openshift.io/v1",
-          "kind": "ClusterCSIDriver",
-          "metadata": {
-            "name": "efs.csi.aws.com"
-          },
-          "spec": {
-            "logLevel": "Normal",
-            "managementState": "Managed",
-            "operatorLogLevel": "Normal"
-          }
-        }
-      ]
     categories: Storage
     "operatorframework.io/suggested-namespace": openshift-cluster-csi-drivers
     capabilities: Full Lifecycle
