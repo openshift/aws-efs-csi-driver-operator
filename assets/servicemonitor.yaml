@@ -13,14 +13,6 @@ spec:
     tlsConfig:
       caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
       serverName: aws-efs-csi-driver-controller-metrics.${NAMESPACE}.svc
-  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-    interval: 30s
-    path: /metrics
-    port: driver-m
-    scheme: https
-    tlsConfig:
-      caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
-      serverName: aws-efs-csi-driver-controller-metrics.${NAMESPACE}.svc
   jobLabel: component
   selector:
     matchLabels:
