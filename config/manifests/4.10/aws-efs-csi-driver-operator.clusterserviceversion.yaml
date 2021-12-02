@@ -16,6 +16,7 @@ metadata:
   labels:
     operator-metering: "true"
     "operatorframework.io/arch.amd64": supported
+    "operatorframework.io/arch.arm64": supported
 spec:
   displayName: AWS EFS CSI Driver Operator
   description: Operator that installs and configures the CSI driver for Amazon Elastic File System (AWS EFS).
