@@ -9,7 +9,7 @@ metadata:
     capabilities: Full Lifecycle
     containerImage: quay.io/openshift/origin-aws-efs-csi-driver-operator:latest
     support: Red Hat
-    operators.openshift.io/infrastructure-features: '["disconnected", "csi"]'
+    operators.openshift.io/infrastructure-features: '["csi"]'
     repository: https://github.com/openshift/aws-efs-csi-driver-operator
     createdAt: "2021-07-14T00:00:00Z"
     description: Install and configure AWS EFS CSI driver.
