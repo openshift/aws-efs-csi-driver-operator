@@ -154,6 +154,7 @@ spec:
             - --csi-address=/csi/csi.sock
             - --probe-timeout=3s
             - --health-port=10303
+            - --v=${LOG_LEVEL}
           securityContext:
             # The container needs to be privileged to be able to talk to the driver CSI socket, which was created by a privileged container
             privileged: true
