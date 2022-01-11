@@ -46,6 +46,7 @@ type ResourceInfo struct {
 	securityGroupID string
 	efsID           string
 	mountTargets    []string
+	userTags        []v1.AWSResourceTag
 }
 
 func NewEFSSession(infra *v1.Infrastructure, sess *session.Session) *EFS {
@@ -61,6 +62,9 @@ func NewEFSSession(infra *v1.Infrastructure, sess *session.Session) *EFS {
 }
 
 func (efs *EFS) CreateEFSVolume(nodes *corev1.NodeList) (string, error) {
+	userTags := efs.getUserTags()
+	efs.resources.userTags = userTags
+
 	instances := efs.getInstanceIDs(nodes)
 	err := efs.getSecurityInfo(instances)
 	if err != nil {
@@ -94,6 +98,10 @@ func (efs *EFS) CreateEFSVolume(nodes *corev1.NodeList) (string, error) {
 	}
 	log("successfully created file system %s", fileSystemID)
 	return fileSystemID, nil
+}
+
+func (efs *EFS) getUserTags() []v1.AWSResourceTag {
+	return efs.infra.Status.PlatformStatus.AWS.ResourceTags
 }
 
 func (efs *EFS) getInstanceIDs(nodes *corev1.NodeList) []string {
@@ -169,19 +177,28 @@ func log(msg string, args ...interface{}) {
 
 func (efs *EFS) createEFSFileSystem() (string, error) {
 	volumeName := fmt.Sprintf(efsVolumeNameFormat, efs.infra.Status.InfrastructureName)
+
+	tags := []*awsefs.Tag{
+		{
+			Key:   aws.String("Name"),
+			Value: aws.String(volumeName),
+		},
+		{
+			Key:   aws.String(efs.getClusterTagKey()),
+			Value: aws.String("owned"),
+		},
+	}
+	for _, tag := range efs.resources.userTags {
+		tags = append(tags, &awsefs.Tag{
+			Key:   aws.String(tag.Key),
+			Value: aws.String(tag.Value),
+		})
+	}
+
 	input := &awsefs.CreateFileSystemInput{
 		Encrypted:       aws.Bool(true),
 		PerformanceMode: aws.String(awsefs.PerformanceModeGeneralPurpose),
-		Tags: []*awsefs.Tag{
-			{
-				Key:   aws.String("Name"),
-				Value: aws.String(volumeName),
-			},
-			{
-				Key:   aws.String(efs.getClusterTagKey()),
-				Value: aws.String("owned"),
-			},
-		},
+		Tags:            tags,
 	}
 	response, err := efs.efsClient.CreateFileSystem(input)
 	if err != nil {
