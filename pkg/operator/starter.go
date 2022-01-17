@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/aws-efs-csi-driver-operator/pkg/operator/staticresource"
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/csi/csidrivercontrollerservicecontroller"
+	"github.com/openshift/library-go/pkg/operator/csi/csidrivernodeservicecontroller"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"k8s.io/client-go/dynamic"
@@ -28,7 +29,8 @@ import (
 
 const (
 	// Operand and operator run in the same namespace
-	operatorName = "aws-efs-csi-driver-operator"
+	operatorName       = "aws-efs-csi-driver-operator"
+	trustedCAConfigMap = "aws-efs-csi-driver-trusted-ca-bundle"
 
 	namespaceReplaceKey = "${NAMESPACE}"
 	// From credentials.yaml
@@ -43,6 +45,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient, operatorNamespace, "")
 	secretInformer := kubeInformersForNamespaces.InformersFor(operatorNamespace).Core().V1().Secrets()
 	nodeInformer := kubeInformersForNamespaces.InformersFor("").Core().V1().Nodes()
+	configMapInformer := kubeInformersForNamespaces.InformersFor(operatorNamespace).Core().V1().ConfigMaps()
 
 	// Create config clientset and informer. This is used to get the cluster ID
 	configClient := configclient.NewForConfigOrDie(rest.AddUserAgent(controllerConfig.KubeConfig, operatorName))
@@ -75,7 +78,11 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		kubeClient,
 		kubeInformersForNamespaces.InformersFor(operatorNamespace),
 		nil,
-	).WithCSIDriverControllerService(
+		csidrivernodeservicecontroller.WithCABundleDaemonSetHook(
+			operatorNamespace,
+			trustedCAConfigMap,
+			configMapInformer,
+		)).WithCSIDriverControllerService(
 		"AWSEFSDriverControllerServiceController",
 		replaceNamespaceFunc(operatorNamespace),
 		"controller.yaml",
@@ -87,6 +94,11 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 			nodeInformer.Informer(),
 			infraInformer.Informer(),
 		},
+		csidrivercontrollerservicecontroller.WithCABundleDeploymentHook(
+			operatorNamespace,
+			trustedCAConfigMap,
+			configMapInformer,
+		),
 		csidrivercontrollerservicecontroller.WithSecretHashAnnotationHook(operatorNamespace, secretName, secretInformer),
 		csidrivercontrollerservicecontroller.WithObservedProxyDeploymentHook(),
 		csidrivercontrollerservicecontroller.WithReplicasHook(nodeInformer.Lister()),
@@ -117,6 +129,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		MetricsService:           resourceread.ReadServiceV1OrDie(mustReplaceNamespace(operatorNamespace, "service.yaml")),
 		RBACProxyRole:            resourceread.ReadClusterRoleV1OrDie(mustReplaceNamespace(operatorNamespace, "rbac/kube_rbac_proxy_role.yaml")),
 		RBACProxyRoleBinding:     resourceread.ReadClusterRoleBindingV1OrDie(mustReplaceNamespace(operatorNamespace, "rbac/kube_rbac_proxy_binding.yaml")),
+		CAConfigMap:              resourceread.ReadConfigMapV1OrDie(mustReplaceNamespace(operatorNamespace, "cabundle_cm.yaml")),
 	}
 	staticController := staticresource.NewCSIStaticResourceController(
 		"CSIStaticResourceController",
