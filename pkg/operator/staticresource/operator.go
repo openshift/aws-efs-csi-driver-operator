@@ -23,6 +23,7 @@ import (
 type SyncObjects struct {
 	CSIDriver      *storagev1.CSIDriver
 	PrivilegedRole *rbacv1.ClusterRole
+	CAConfigMap    *corev1.ConfigMap
 
 	NodeServiceAccount *corev1.ServiceAccount
 	NodeRoleBinding    *rbacv1.ClusterRoleBinding
@@ -78,6 +79,7 @@ func NewCSIStaticResourceController(
 		informers.InformersFor(operatorNamespace).Rbac().V1().Roles().Informer(),
 		informers.InformersFor(operatorNamespace).Rbac().V1().RoleBindings().Informer(),
 		informers.InformersFor(operatorNamespace).Core().V1().Services().Informer(),
+		informers.InformersFor(operatorNamespace).Core().V1().ConfigMaps().Informer(),
 	}
 	return factory.New().
 		WithSyncDegradedOnError(operatorClient).
@@ -112,7 +114,7 @@ func (c *CSIStaticResourceController) sync(ctx context.Context, controllerContex
 }
 
 func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *opv1.OperatorSpec, opStatus *opv1.OperatorStatus, controllerContext factory.SyncContext) error {
-	err := operatorv1helpers.EnsureFinalizer(c.operatorClient, c.operatorName)
+	err := operatorv1helpers.EnsureFinalizer(ctx, c.operatorClient, c.operatorName)
 	if err != nil {
 		return err
 	}
@@ -124,6 +126,10 @@ func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *o
 		errs = append(errs, err)
 	}
 	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.PrivilegedRole)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyConfigMap(ctx, c.kubeClient.CoreV1(), c.eventRecorder, c.objs.CAConfigMap)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -198,6 +204,14 @@ func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *
 			errs = append(errs, err)
 		} else {
 			klog.V(4).Infof("ClusterRole %s already removed", c.objs.PrivilegedRole.Name)
+		}
+	}
+
+	if err := c.kubeClient.CoreV1().ConfigMaps(c.operatorNamespace).Delete(ctx, c.objs.CAConfigMap.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("ConfigMap %s already removed", c.objs.CAConfigMap.Name)
 		}
 	}
 
@@ -297,5 +311,5 @@ func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *
 	}
 
 	// All removed, remove the finalizer as the last step
-	return operatorv1helpers.RemoveFinalizer(c.operatorClient, c.operatorName)
+	return operatorv1helpers.RemoveFinalizer(ctx, c.operatorClient, c.operatorName)
 }

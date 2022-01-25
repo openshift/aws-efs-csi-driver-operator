@@ -5,6 +5,7 @@ metadata:
   namespace: ${NAMESPACE}
   annotations:
     config.openshift.io/inject-proxy: csi-driver
+    config.openshift.io/inject-proxy-cabundle: csi-driver
 spec:
   selector:
     matchLabels:
