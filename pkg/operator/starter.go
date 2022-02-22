@@ -71,7 +71,10 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	).WithManagementStateController(
 		operatorName,
 		true,
-	).WithLogLevelController().WithCSIDriverNodeService(
+	).WithLogLevelController().WithCSIConfigObserverController(
+		"AWSEFSDriverCSIConfigObserverController",
+		configInformers,
+	).WithCSIDriverNodeService(
 		"AWSEFSDriverNodeServiceController",
 		replaceNamespaceFunc(operatorNamespace),
 		"node.yaml",
