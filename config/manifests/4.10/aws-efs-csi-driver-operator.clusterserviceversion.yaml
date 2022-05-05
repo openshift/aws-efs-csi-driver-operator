@@ -248,6 +248,14 @@ spec:
             verbs:
             - '*'
           - apiGroups:
+            - operator.openshift.io
+            resources:
+            - cloudcredentials
+            verbs:
+            - get
+            - list
+            - watch
+          - apiGroups:
             - config.openshift.io
             resources:
             - infrastructures
