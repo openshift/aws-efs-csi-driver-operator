@@ -7,11 +7,11 @@ require (
 	github.com/go-logr/logr v1.2.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/openshift/api v0.0.0-20220114150019-2499da51153e
+	github.com/openshift/api v0.0.0-20220315184754-d7c10d0b647e
 	github.com/openshift/build-machinery-go v0.0.0-20211213093930-7e33a7eb4ce3
 	github.com/openshift/client-go v0.0.0-20211209144617-7385dd6338e3
-	github.com/openshift/library-go v0.0.0-20220114151217-4362aa519714
-	github.com/prometheus/client_golang v1.11.0
+	github.com/openshift/library-go v0.0.0-20220505183534-f2c20ff2ad27
+	github.com/prometheus/client_golang v1.12.1
 	github.com/spf13/cobra v1.2.1
 	golang.org/x/net v0.0.0-20220114011407-0dd24b26b47d // indirect
 	k8s.io/api v0.23.1
@@ -30,7 +30,7 @@ require (
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
-	github.com/cespare/xxhash/v2 v2.1.1 // indirect
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -62,8 +62,8 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/profile v1.3.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.28.0 // indirect
-	github.com/prometheus/procfs v0.6.0 // indirect
+	github.com/prometheus/common v0.32.1 // indirect
+	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -87,7 +87,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
+	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
 	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
