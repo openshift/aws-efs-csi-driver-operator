@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/openshift/library-go/pkg/operator/v1helpers"
+
 	"github.com/openshift/aws-efs-csi-driver-operator/assets"
 	"github.com/openshift/aws-efs-csi-driver-operator/pkg/operator/staticresource"
 	"github.com/openshift/library-go/pkg/controller/factory"
@@ -21,10 +23,11 @@ import (
 	opv1 "github.com/openshift/api/operator/v1"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
+	operatorv1client "github.com/openshift/client-go/operator/clientset/versioned"
+	operatorinformer "github.com/openshift/client-go/operator/informers/externalversions"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/csi/csicontrollerset"
 	goc "github.com/openshift/library-go/pkg/operator/genericoperatorclient"
-	"github.com/openshift/library-go/pkg/operator/v1helpers"
 )
 
 const (
@@ -46,6 +49,8 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	secretInformer := kubeInformersForNamespaces.InformersFor(operatorNamespace).Core().V1().Secrets()
 	nodeInformer := kubeInformersForNamespaces.InformersFor("").Core().V1().Nodes()
 	configMapInformer := kubeInformersForNamespaces.InformersFor(operatorNamespace).Core().V1().ConfigMaps()
+	typedVersionedClient := operatorv1client.NewForConfigOrDie(controllerConfig.KubeConfig)
+	operatorInformer := operatorinformer.NewSharedInformerFactory(typedVersionedClient, 20*time.Minute)
 
 	// Create config clientset and informer. This is used to get the cluster ID
 	configClient := configclient.NewForConfigOrDie(rest.AddUserAgent(controllerConfig.KubeConfig, operatorName))
@@ -111,6 +116,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		replaceNamespaceFunc(operatorNamespace),
 		"credentials.yaml",
 		dynamicClient,
+		operatorInformer,
 	).WithServiceMonitorController(
 		"AWSEFSDriverServiceMonitorController",
 		dynamicClient,
@@ -148,6 +154,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	go kubeInformersForNamespaces.Start(ctx.Done())
 	go dynamicInformers.Start(ctx.Done())
 	go configInformers.Start(ctx.Done())
+	go operatorInformer.Start(ctx.Done())
 
 	klog.Info("Starting controllerset")
 	go cs.Run(ctx, 1)
