@@ -323,8 +323,19 @@ spec:
                       memory: 50Mi
                       cpu: 10m
                 priorityClassName: system-cluster-critical
-                nodeSelector:
-                  node-role.kubernetes.io/master: ""
+                # Strongly prefer a master node, but don't require it.
+                # We want the same Deployment to work on hypershift,
+                # without any master nodes.
+                affinity:
+                  nodeAffinity:
+                    preferredDuringSchedulingIgnoredDuringExecution:
+                    - weight: 100
+                      preference:
+                        matchExpressions:
+                        - key: node-role.kubernetes.io/master
+                          operator: In
+                          values:
+                          - ""
                 tolerations:
                   - key: CriticalAddonsOnly
                     operator: Exists
