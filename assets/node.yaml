@@ -68,6 +68,11 @@ spec:
             requests:
               memory: 50Mi
               cpu: 10m
+            # The CSI driver can consume a lot of memory if many volumes are created at once. This is
+            # intended to prevent the driver from adding undue stress to control-plane nodes.
+            limits:
+              memory: 1Gi
+              cpu: 100m
         - name: csi-node-driver-registrar
           securityContext:
             privileged: true
