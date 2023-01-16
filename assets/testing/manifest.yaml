@@ -18,4 +18,4 @@ DriverInfo:
     snapshotDataSource: false
     RWX: true
     topology: false
-
+    multiplePVsSameID: true
