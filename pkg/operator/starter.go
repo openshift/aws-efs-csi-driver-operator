@@ -37,7 +37,9 @@ const (
 
 	namespaceReplaceKey = "${NAMESPACE}"
 	// From credentials.yaml
-	secretName = "aws-efs-cloud-credentials"
+	cloudCredSecretName = "aws-efs-cloud-credentials"
+	// From controller.yaml
+	metricsCertSecretName = "aws-efs-csi-driver-controller-metrics-serving-cert"
 )
 
 func RunOperator(ctx context.Context, controllerConfig *controllercmd.ControllerContext) error {
@@ -107,7 +109,8 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 			trustedCAConfigMap,
 			configMapInformer,
 		),
-		csidrivercontrollerservicecontroller.WithSecretHashAnnotationHook(operatorNamespace, secretName, secretInformer),
+		csidrivercontrollerservicecontroller.WithSecretHashAnnotationHook(operatorNamespace, cloudCredSecretName, secretInformer),
+		csidrivercontrollerservicecontroller.WithSecretHashAnnotationHook(operatorNamespace, metricsCertSecretName, secretInformer),
 		csidrivercontrollerservicecontroller.WithObservedProxyDeploymentHook(),
 		csidrivercontrollerservicecontroller.WithReplicasHook(nodeInformer.Lister()),
 	).WithCredentialsRequestController(

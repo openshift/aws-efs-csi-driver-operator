@@ -25,10 +25,12 @@ EOF
 make
 
 # Set the environment variables
-export DRIVER_IMAGE=amazon/aws-efs-csi-driver:v1.1.1
+export DRIVER_IMAGE=quay.io/openshift/origin-aws-efs-csi-driver:latest
 export NODE_DRIVER_REGISTRAR_IMAGE=quay.io/openshift/origin-csi-node-driver-registrar:latest
-export LIVENESS_PROBE_IMAGE=quay.io/openshift/origin-csi-livenessprobe:4.8
+export LIVENESS_PROBE_IMAGE=quay.io/openshift/origin-csi-livenessprobe:latest
 export OPERATOR_NAME=aws-efs-csi-driver-operator
+export PROVISIONER_IMAGE=quay.io/openshift/origin-csi-external-provisioner:latest
+export KUBE_RBAC_PROXY_IMAGE=quay.io/openshift/origin-kube-rbac-proxy:latest
 
 # Run the operator via CLI
 ./aws-efs-csi-driver-operator start --kubeconfig $KUBECONFIG --namespace openshift-cluster-csi-drivers
