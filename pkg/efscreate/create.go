@@ -83,7 +83,7 @@ func getInfra(ctx context.Context, infraClient *configclient.Clientset) (infra *
 		Factor:   operationBackoffFactor,
 		Steps:    operationRetryCount,
 	}
-	err = wait.ExponentialBackoffWithContext(ctx, backoff, func() (bool, error) {
+	err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 		var apiError error
 		infra, apiError = infraClient.ConfigV1().Infrastructures().Get(ctx, infraGlobalName, metav1.GetOptions{})
 		if apiError != nil {
@@ -105,7 +105,7 @@ func getSecret(ctx context.Context, client *kubeclient.Clientset) (*corev1.Secre
 		Steps:    operationRetryCount,
 	}
 	var awsCreds *corev1.Secret
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func() (bool, error) {
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 		var apiError error
 		awsCreds, apiError = client.CoreV1().Secrets(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
 		if apiError != nil {
@@ -127,7 +127,7 @@ func getNodes(ctx context.Context, client *kubeclient.Clientset) (*corev1.NodeLi
 		Steps:    operationRetryCount,
 	}
 	var nodes *corev1.NodeList
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func() (bool, error) {
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 		var apiError error
 		nodes, apiError = client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if apiError != nil {
