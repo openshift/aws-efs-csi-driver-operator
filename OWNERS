@@ -4,4 +4,5 @@ approvers:
 - gnufied
 - bertinatto
 - dobsonj
-component: "Storage"
+- mpatlasov
+component: "Storage / Operators"
