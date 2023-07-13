@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/openshift/aws-efs-csi-driver-operator/pkg/efscreate"
 	"github.com/openshift/aws-efs-csi-driver-operator/pkg/version"
+)
+
+var (
+	useLocalAWSCredentials bool
 )
 
 func main() {
@@ -31,7 +36,7 @@ func NewOperatorCommand() *cobra.Command {
 	ctrlCmdConfig := controllercmd.NewControllerCommandConfig(
 		"create-efs-volume",
 		version.Get(),
-		efscreate.RunOperator,
+		runOperatorWithCredentialsConfig,
 	)
 	// we don't need leader election and metrics for CLI commands
 	ctrlCmdConfig.DisableLeaderElection = true
@@ -40,8 +45,13 @@ func NewOperatorCommand() *cobra.Command {
 	ctrlCmd := ctrlCmdConfig.NewCommand()
 	ctrlCmd.Use = "start"
 	ctrlCmd.Short = "Create EFS volume"
-
+	flags := ctrlCmd.Flags()
+	flags.BoolVar(&useLocalAWSCredentials, "local-aws-creds", false, "Use local AWS credentials instead of credentials loaded from the OCP cluster.")
 	cmd.AddCommand(ctrlCmd)
 
 	return cmd
+}
+
+func runOperatorWithCredentialsConfig(ctx context.Context, controllerConfig *controllercmd.ControllerContext) error {
+	return efscreate.RunOperator(ctx, controllerConfig, useLocalAWSCredentials)
 }

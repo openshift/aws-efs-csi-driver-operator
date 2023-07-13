@@ -34,7 +34,7 @@ const (
 	fileMode              = 0640
 )
 
-func RunOperator(ctx context.Context, controllerConfig *controllercmd.ControllerContext) error {
+func RunOperator(ctx context.Context, controllerConfig *controllercmd.ControllerContext, useLocalAWSCredentials bool) error {
 	// Create core clientset for core and infra objects
 	kubeClient := kubeclient.NewForConfigOrDie(rest.AddUserAgent(controllerConfig.KubeConfig, operatorName))
 	nodes, err := getNodes(ctx, kubeClient)
@@ -49,7 +49,10 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		klog.Errorf("error listing infrastructures objects: %v", err)
 		return fmt.Errorf("error listing infrastructure objects: %v", err)
 	}
-	ec2Session, err := getEC2Client(ctx, kubeClient, infra.Status.PlatformStatus.AWS.Region)
+	region := infra.Status.PlatformStatus.AWS.Region
+	klog.V(2).Infof("Detected AWS region from the OCP cluster: %s", region)
+
+	ec2Session, err := getEC2Client(ctx, useLocalAWSCredentials, kubeClient, region)
 	if err != nil {
 		klog.Errorf("error getting aws client: %v", err)
 		return fmt.Errorf("error getting aws client: %v", err)
@@ -179,27 +182,38 @@ func writeCSIManifest(scName string) error {
 	return err
 }
 
-func getEC2Client(ctx context.Context, client *kubeclient.Clientset, region string) (*session.Session, error) {
-	// get AWS credentials
-	awsCreds, err := getSecret(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-	// detect region
-	// base64 decode
-	id, found := awsCreds.Data["aws_access_key_id"]
-	if !found {
-		return nil, fmt.Errorf("cloud credential id not found")
-	}
-	key, found := awsCreds.Data["aws_secret_access_key"]
-	if !found {
-		return nil, fmt.Errorf("cloud credential key not found")
+func getEC2Client(
+	ctx context.Context,
+	useLocalAWSCreds bool,
+	client *kubeclient.Clientset,
+	region string) (*session.Session, error) {
+
+	cfg := &aws.Config{
+		Region: aws.String(region),
 	}
 
-	sess, err := session.NewSession(&aws.Config{
-		Region:      aws.String(region),
-		Credentials: credentials.NewStaticCredentials(string(id), string(key), ""),
-	})
+	if !useLocalAWSCreds {
+		// Use credentials from the cluster Secret
+		awsCreds, err := getSecret(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+		id, found := awsCreds.Data["aws_access_key_id"]
+		if !found {
+			return nil, fmt.Errorf("cloud credential id not found")
+		}
+		key, found := awsCreds.Data["aws_secret_access_key"]
+		if !found {
+			return nil, fmt.Errorf("cloud credential key not found")
+		}
+
+		klog.V(2).Infof("Using AWS credentials from the cluster, got key id: %s", id)
+		cfg.Credentials = credentials.NewStaticCredentials(string(id), string(key), "")
+	} else {
+		klog.V(2).Infof("Using AWS credentials from local machine, either env. vars or ~/.aws/config")
+	}
+
+	sess, err := session.NewSession(cfg)
 	if err != nil {
 		return nil, err
 	}

@@ -62,32 +62,41 @@ func NewEFSSession(infra *v1.Infrastructure, sess *session.Session) *EFS {
 
 func (efs *EFS) CreateEFSVolume(nodes *corev1.NodeList) (string, error) {
 	instances := efs.getInstanceIDs(nodes)
+
+	klog.V(4).Info("Loading AWS VPC")
 	err := efs.getSecurityInfo(instances)
 	if err != nil {
 		return "", err
 	}
+
+	klog.V(4).Info("Creating SecurityGroup")
 	sgid, err := efs.createSecurityGroup()
 	if err != nil {
 		return "", err
 	}
 	efs.resources.securityGroupID = sgid
+
+	klog.V(4).Info("Adding firewall rule for NFS")
 	ok, err := efs.addFireWallRule()
 	if err != nil || !ok {
 		return "", fmt.Errorf("error adding firewall rule: %v", err)
 	}
 
+	klog.V(4).Info("Creating EFS volume")
 	fileSystemID, err := efs.createEFSFileSystem()
 	if err != nil {
 		return "", err
 	}
 	efs.resources.efsID = fileSystemID
+
+	klog.V(4).Info("Creating MountTargets")
 	mts, err := efs.createMountTargets()
 	if err != nil {
 		return "", err
 	}
 	efs.resources.mountTargets = mts
 
-	// wait for all mountTargets associated with filesystem ID to be become available
+	klog.V(4).Info("Waiting for MountTargets to get available")
 	err = efs.waitForAvailableMountTarget()
 	if err != nil {
 		return fileSystemID, fmt.Errorf("waiting for mount targets to be available failed: %v", err)
