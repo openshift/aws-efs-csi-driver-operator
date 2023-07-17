@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/openshift/aws-efs-csi-driver-operator/assets"
 	"github.com/openshift/aws-efs-csi-driver-operator/pkg/operator/staticresource"
@@ -36,6 +38,9 @@ const (
 	trustedCAConfigMap = "aws-efs-csi-driver-trusted-ca-bundle"
 
 	namespaceReplaceKey = "${NAMESPACE}"
+	stsIAMRoleARNEnvVar = "ROLEARN"
+	cloudTokenPath      = "/var/run/secrets/openshift/serviceaccount/token"
+
 	// From credentials.yaml
 	cloudCredSecretName = "aws-efs-cloud-credentials"
 	// From controller.yaml
@@ -120,6 +125,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		"credentials.yaml",
 		dynamicClient,
 		operatorInformer,
+		stsCredentialsRequestHook,
 	).WithServiceMonitorController(
 		"AWSEFSDriverServiceMonitorController",
 		dynamicClient,
@@ -184,4 +190,21 @@ func replaceNamespaceFunc(namespace string) resourceapply.AssetFunc {
 		}
 		return bytes.Replace(content, []byte(namespaceReplaceKey), []byte(namespace), -1), nil
 	}
+}
+
+func stsCredentialsRequestHook(spec *opv1.OperatorSpec, cr *unstructured.Unstructured) error {
+	stsRoleARN := os.Getenv(stsIAMRoleARNEnvVar)
+	if stsRoleARN == "" {
+		// Not in STS mode
+		return nil
+	}
+
+	klog.V(4).Infof("Using ARN %s and token path %s", stsRoleARN)
+	if err := unstructured.SetNestedField(cr.Object, cloudTokenPath, "spec", "cloudTokenPath"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(cr.Object, stsRoleARN, "spec", "providerSpec", "stsIAMRoleARN"); err != nil {
+		return err
+	}
+	return nil
 }
