@@ -30,7 +30,6 @@ type SyncObjects struct {
 
 	ControllerServiceAccount *corev1.ServiceAccount
 	ControllerRoleBinding    *rbacv1.ClusterRoleBinding
-	ProvisionerRole          *rbacv1.ClusterRole
 	ProvisionerRoleBinding   *rbacv1.ClusterRoleBinding
 
 	PrometheusRole        *rbacv1.Role
@@ -38,6 +37,9 @@ type SyncObjects struct {
 	MetricsService        *corev1.Service
 	RBACProxyRole         *rbacv1.ClusterRole
 	RBACProxyRoleBinding  *rbacv1.ClusterRoleBinding
+
+	LeaseLeaderElectionRole        *rbacv1.Role
+	LeaseLeaderElectionRoleBinding *rbacv1.RoleBinding
 }
 
 // CSIStaticResourceController creates, manages and deletes static resources of a CSI driver, such as RBAC rules.
@@ -153,11 +155,15 @@ func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *o
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ProvisionerRole)
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ProvisionerRoleBinding)
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ProvisionerRoleBinding)
+	_, _, err = resourceapply.ApplyRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.LeaseLeaderElectionRole)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.LeaseLeaderElectionRoleBinding)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -249,19 +255,27 @@ func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *
 		}
 	}
 
-	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.objs.ProvisionerRole.Name, metav1.DeleteOptions{}); err != nil {
-		if !apierrors.IsNotFound(err) {
-			errs = append(errs, err)
-		} else {
-			klog.V(4).Infof("ClusterRole %s already removed", c.objs.ProvisionerRole.Name)
-		}
-	}
-
 	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.ProvisionerRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
 		} else {
 			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.objs.ProvisionerRoleBinding.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().Roles(c.operatorNamespace).Delete(ctx, c.objs.LeaseLeaderElectionRole.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("Role %s already removed", c.objs.LeaseLeaderElectionRole.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().RoleBindings(c.operatorNamespace).Delete(ctx, c.objs.LeaseLeaderElectionRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("RoleBinding %s already removed", c.objs.LeaseLeaderElectionRoleBinding.Name)
 		}
 	}
 
