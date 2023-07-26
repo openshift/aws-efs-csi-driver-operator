@@ -4,5 +4,6 @@ approvers:
 - gnufied
 - bertinatto
 - dobsonj
+- RomanBednar
 - mpatlasov
 component: "Storage / Operators"
