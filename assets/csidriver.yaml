@@ -2,6 +2,9 @@ kind: CSIDriver
 apiVersion: storage.k8s.io/v1
 metadata:
   name: efs.csi.aws.com
+  annotations:
+    # This CSIDriver is managed by an OCP CSI operator
+    csi.openshift.io/managed: "true"
 spec:
   attachRequired: false
   podInfoOnMount: false
