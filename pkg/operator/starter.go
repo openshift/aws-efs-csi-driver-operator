@@ -200,7 +200,7 @@ func stsCredentialsRequestHook(spec *opv1.OperatorSpec, cr *unstructured.Unstruc
 		return nil
 	}
 
-	klog.V(4).Infof("Using ARN %s and token path %s", stsRoleARN)
+	klog.V(4).Infof("Using ARN %s and token path %s", stsRoleARN, cloudTokenPath)
 	if err := unstructured.SetNestedField(cr.Object, cloudTokenPath, "spec", "cloudTokenPath"); err != nil {
 		return err
 	}
