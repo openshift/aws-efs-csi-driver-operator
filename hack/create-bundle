@@ -12,11 +12,12 @@ if [ "$#" -ne "4" ]; then
     exit 1
 fi
 
-TOOL_BIN=$(which podman 2>/dev/null || which docker 2>/dev/null)
+DEFAULT_TOOL_BIN=$(which podman 2>/dev/null || which docker 2>/dev/null)
 if [ "$? " -ne "0" ]; then
 	echo "Error: No suitable container manipulation tool (podman, docker) found in \$PATH" 1>&2
 	exit 1
 fi
+TOOL_BIN=${TOOL_BIN:-$DEFAULT_TOOL_BIN}
 
 TOOL_NAME=$(basename $TOOL_BIN)
 DRIVER_IMAGE=$1
@@ -32,7 +33,10 @@ cp -r -v ../../config/* .
 MANIFEST=manifests/stable/aws-efs-csi-driver-operator.clusterserviceversion.yaml
 
 # Replace images in the manifest - error prone, needs to be in sync with image-references.
-sed -i $MANIFEST -e "s~quay.io/openshift/origin-aws-efs-csi-driver-operator:latest~$OPERATOR_IMAGE~" -e "s~quay.io/openshift/origin-aws-efs-csi-driver:latest~$DRIVER_IMAGE~"
+sed -i.bak -e "s~quay.io/openshift/origin-aws-efs-csi-driver-operator:latest~$OPERATOR_IMAGE~" \
+  -e "s~quay.io/openshift/origin-aws-efs-csi-driver:latest~$DRIVER_IMAGE~" \
+  $MANIFEST
+rm $MANIFEST.bak
 
 # Build the bundle and push it
 $TOOL_BIN build -t $BUNDLE_IMAGE -f bundle.Dockerfile .
