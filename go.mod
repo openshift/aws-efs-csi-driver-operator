@@ -7,10 +7,10 @@ require (
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/openshift/api v0.0.0-20231120145327-841b3aa7251d
+	github.com/openshift/api v0.0.0-20231129134630-a782d1c1541c
 	github.com/openshift/build-machinery-go v0.0.0-20230824093055-6a18da01283c
 	github.com/openshift/client-go v0.0.0-20231110140829-a6ca51f6d5ba
-	github.com/openshift/library-go v0.0.0-20231120141757-bd996d74a24c
+	github.com/openshift/library-go v0.0.0-20231213173854-dc28c15393c9
 	github.com/prometheus/client_golang v1.17.0
 	github.com/spf13/cobra v1.7.0
 	golang.org/x/net v0.19.0 // indirect
