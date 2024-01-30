@@ -72,7 +72,6 @@ spec:
             # intended to prevent the driver from adding undue stress to control-plane nodes.
             limits:
               memory: 1Gi
-              cpu: 100m
         - name: csi-node-driver-registrar
           securityContext:
             privileged: true

@@ -103,7 +103,6 @@ spec:
             # intended to prevent the driver from adding undue stress to control-plane nodes.
             limits:
               memory: 1Gi
-              cpu: 100m
           # external-provisioner container
         - name: csi-provisioner
           image: ${PROVISIONER_IMAGE}
