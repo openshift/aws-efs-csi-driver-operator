@@ -22,7 +22,6 @@ spec:
       annotations:
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
     spec:
-      hostNetwork: true
       serviceAccount: aws-efs-csi-driver-controller-sa
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -74,8 +73,7 @@ spec:
               value: /var/run/secrets/aws/credentials
           ports:
             - name: healthz
-              # Due to hostNetwork, this port is open on a node!
-              containerPort: 10303
+              containerPort: 10302
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -164,7 +162,7 @@ spec:
           args:
             - --csi-address=/csi/csi.sock
             - --probe-timeout=3s
-            - --health-port=10303
+            - --health-port=10302
             - --v=${LOG_LEVEL}
           securityContext:
             # The container needs to be privileged to be able to talk to the driver CSI socket, which was created by a privileged container
