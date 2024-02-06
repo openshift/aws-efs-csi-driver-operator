@@ -88,6 +88,7 @@ spec:
           securityContext:
             # The driver needs to be privileged to be able to mount + clean EFS sub-directories that are used as PVs
             privileged: true
+          terminationMessagePolicy: FallbackToLogsOnError
           volumeMounts:
             - name: aws-credentials
               mountPath: /var/run/secrets/aws
@@ -127,6 +128,7 @@ spec:
           securityContext:
             # The container needs to be privileged to be able to talk to the driver CSI socket, which was created by a privileged container
             privileged: true
+          terminationMessagePolicy: FallbackToLogsOnError
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -155,6 +157,7 @@ spec:
             requests:
               memory: 20Mi
               cpu: 10m
+          terminationMessagePolicy: FallbackToLogsOnError
           volumeMounts:
           - mountPath: /etc/tls/private
             name: metrics-serving-cert
@@ -169,6 +172,7 @@ spec:
           securityContext:
             # The container needs to be privileged to be able to talk to the driver CSI socket, which was created by a privileged container
             privileged: true
+          terminationMessagePolicy: FallbackToLogsOnError
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
