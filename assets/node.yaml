@@ -62,7 +62,7 @@ spec:
           ports:
             - name: healthz
               # Due to hostNetwork, this port is open on all nodes!
-              containerPort: 10304
+              containerPort: 10303
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -87,6 +87,7 @@ spec:
           args:
             - --csi-address=$(ADDRESS)
             - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+            - --http-endpoint=:10305
             - --v=${LOG_LEVEL}
           lifecycle:
             preStop:
@@ -97,6 +98,18 @@ spec:
               value: /csi/csi.sock
             - name: DRIVER_REG_SOCK_PATH
               value: /var/lib/kubelet/plugins/efs.csi.aws.com/csi.sock
+          ports:
+            - containerPort: 10305
+              name: rhealthz
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: rhealthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 10
+            failureThreshold: 5
           volumeMounts:
             - name: plugin-dir
               mountPath: /csi
@@ -111,7 +124,7 @@ spec:
           args:
             - --csi-address=/csi/csi.sock
             - --probe-timeout=3s
-            - --health-port=10304
+            - --health-port=10303
             - --v=${LOG_LEVEL}
           volumeMounts:
             - name: plugin-dir
