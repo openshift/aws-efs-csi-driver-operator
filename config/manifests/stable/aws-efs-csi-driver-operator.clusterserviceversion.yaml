@@ -36,7 +36,7 @@ spec:
 
     1. [Install the operator](https://docs.openshift.com/container-platform/latest/storage/container_storage_interface/persistent-storage-csi-aws-efs.html#persistent-storage-csi-olm-operator-install_persistent-storage-csi-aws-efs). This section also covers details about configuring an AWS role in OCP cluster that uses Secure Token Services (STS).
 
-    2. [Install the AWS EBS CSI driver using the operator](https://docs.openshift.com/container-platform/latest/storage/container_storage_interface/persistent-storage-csi-aws-efs.html#persistent-storage-csi-efs-driver-install_persistent-storage-csi-aws-efs)
+    2. [Install the AWS EFS CSI driver using the operator](https://docs.openshift.com/container-platform/latest/storage/container_storage_interface/persistent-storage-csi-aws-efs.html#persistent-storage-csi-efs-driver-install_persistent-storage-csi-aws-efs)
 
     3. Finally, [create a StorageClass](https://docs.openshift.com/container-platform/latest/storage/container_storage_interface/persistent-storage-csi-aws-efs.html#storage-create-storage-class_persistent-storage-csi-aws-efs) that enables dynamic provisioning of PersistentVolumes.
 
