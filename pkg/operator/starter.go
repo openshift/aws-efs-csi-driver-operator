@@ -3,6 +3,7 @@ package operator
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -26,15 +27,18 @@ import (
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	operatorv1client "github.com/openshift/client-go/operator/clientset/versioned"
 	operatorinformer "github.com/openshift/client-go/operator/informers/externalversions"
+	clustercsidriverinformer "github.com/openshift/client-go/operator/informers/externalversions/operator/v1"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/csi/csicontrollerset"
 	goc "github.com/openshift/library-go/pkg/operator/genericoperatorclient"
+	appsv1 "k8s.io/api/apps/v1"
 )
 
 const (
 	// Operand and operator run in the same namespace
 	operatorName       = "aws-efs-csi-driver-operator"
 	trustedCAConfigMap = "aws-efs-csi-driver-trusted-ca-bundle"
+	infraConfigName    = "cluster"
 
 	namespaceReplaceKey = "${NAMESPACE}"
 	stsIAMRoleARNEnvVar = "ROLEARN"
@@ -76,6 +80,9 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		return err
 	}
 
+	// Informer for ClusterCSIDriver.
+	clusterCSIDriverInformer := operatorInformer.Operator().V1().ClusterCSIDrivers()
+
 	cs := csicontrollerset.NewCSIControllerSet(
 		operatorClient,
 		controllerConfig.EventRecorder,
@@ -91,12 +98,14 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		"node.yaml",
 		kubeClient,
 		kubeInformersForNamespaces.InformersFor(operatorNamespace),
-		nil,
+		[]factory.Informer{clusterCSIDriverInformer.Informer()},
 		csidrivernodeservicecontroller.WithCABundleDaemonSetHook(
 			operatorNamespace,
 			trustedCAConfigMap,
 			configMapInformer,
-		)).WithCSIDriverControllerService(
+		),
+		WithVolumeMetricsDaemonSetHook(clusterCSIDriverInformer),
+	).WithCSIDriverControllerService(
 		"AWSEFSDriverControllerServiceController",
 		replaceNamespaceFunc(operatorNamespace),
 		"controller.yaml",
@@ -207,4 +216,38 @@ func stsCredentialsRequestHook(spec *opv1.OperatorSpec, cr *unstructured.Unstruc
 		return err
 	}
 	return nil
+}
+
+func WithVolumeMetricsDaemonSetHook(clusterCSIDriverInformer clustercsidriverinformer.ClusterCSIDriverInformer) csidrivernodeservicecontroller.DaemonSetHookFunc {
+	return func(opSpec *opv1.OperatorSpec, ds *appsv1.DaemonSet) error {
+		clusterCSIDriver, err := clusterCSIDriverInformer.Lister().Get(string(opv1.AWSEFSCSIDriver))
+		if err != nil {
+			return err
+		}
+
+		// Short-circuit if metrics are not enabled.
+		config := clusterCSIDriver.Spec.DriverConfig.AWS
+		if clusterCSIDriver.Spec.DriverConfig.AWS == nil || config.EFSVolumeMetricsRefreshPeriod < 1 {
+			return nil
+		}
+
+		containers := ds.Spec.Template.Spec.Containers
+		for i := range containers {
+			if containers[i].Name != "csi-driver" {
+				continue
+			}
+
+			// At this point, we know that config.EFSVolumeMetricsRefreshPeriod is positive and volume metrics should be enabled.
+			containers[i].Args = append(containers[i].Args, "--vol-metrics-opt-in=true")
+			containers[i].Args = append(containers[i].Args, fmt.Sprintf("--vol-metrics-refresh-period=%d", config.EFSVolumeMetricsRefreshPeriod))
+
+			// On the other hand, rate limit value might not be set, so we need to check it. If not set, we'll use the CSI driver's default value.
+			if config.EFSVolumeMetricsFSRateLimit > 0 {
+				containers[i].Args = append(containers[i].Args, fmt.Sprintf("--vol-metrics-fs-rate-limit=%d", config.EFSVolumeMetricsFSRateLimit))
+			}
+		}
+		ds.Spec.Template.Spec.Containers = containers
+
+		return nil
+	}
 }
