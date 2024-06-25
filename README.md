@@ -2,7 +2,7 @@
 
 An operator to deploy the [AWS EFS CSI driver](https://github.com/openshift/aws-efs-csi-driver) in OKD.
 
-This operator is installed by OLM.
+This operator is installed by OLM in OCP.
 
 # Quick start
 
